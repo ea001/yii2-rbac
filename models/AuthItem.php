@@ -11,7 +11,10 @@
 
 namespace dektrium\rbac\models;
 
+use yii\base\InvalidConfigException;
+use yii\base\InvalidParamException;
 use yii\base\Model;
+use yii\helpers\Json;
 use yii\rbac\Item;
 use dektrium\rbac\validators\RbacValidator;
 
@@ -20,25 +23,49 @@ use dektrium\rbac\validators\RbacValidator;
  */
 abstract class AuthItem extends Model
 {
-    /** @var string */
+    /**
+     * @var string
+     */
     public $name;
 
-    /** @var string */
+    /**
+     * @var string
+     */
     public $description;
 
-    /** @var string */
+    /**
+     * @var string
+     */
     public $rule;
 
-    /** @var string[] */
+    /**
+     * @var string
+     */
+    public $data;
+
+    /**
+     * @var bool
+     */
+    public $dataCannotBeDecoded = false;
+
+    /**
+     * @var string[]
+     */
     public $children = [];
 
-    /** @var \yii\rbac\Role|\yii\rbac\Permission */
+    /**
+     * @var \yii\rbac\Role|\yii\rbac\Permission
+     */
     public $item;
 
-    /** @var \dektrium\rbac\components\DbManager */
+    /**
+     * @var \dektrium\rbac\components\DbManager
+     */
     protected $manager;
 
-    /** @inheritdoc */
+    /**
+     * @inheritdoc
+     */
     public function init()
     {
         parent::init();
@@ -47,13 +74,26 @@ abstract class AuthItem extends Model
             $this->name        = $this->item->name;
             $this->description = $this->item->description;
             $this->children    = array_keys($this->manager->getChildren($this->item->name));
+
+            try {
+                if (is_object($this->item->data)) {
+                    $this->dataCannotBeDecoded = true;
+                } else if ($this->item->data !== null) {
+                    $this->data = Json::encode($this->item->data);
+                }
+            } catch (InvalidParamException $e) {
+                $this->dataCannotBeDecoded = true;
+            }
+
             if ($this->item->ruleName !== null) {
                 $this->rule = get_class($this->manager->getRule($this->item->ruleName));
             }
         }
     }
 
-    /** @inheritdoc */
+    /**
+     * @inheritdoc
+     */
     public function attributeLabels()
     {
         return [
@@ -64,16 +104,20 @@ abstract class AuthItem extends Model
         ];
     }
 
-    /** @inheritdoc */
+    /**
+     * @inheritdoc
+     */
     public function scenarios()
     {
         return [
-            'create' => ['name', 'description', 'children', 'rule'],
-            'update' => ['name', 'description', 'children', 'rule'],
+            'create' => ['name', 'description', 'children', 'rule', 'data'],
+            'update' => ['name', 'description', 'children', 'rule', 'data'],
         ];
     }
 
-    /** @inheritdoc */
+    /**
+     * @inheritdoc
+     */
     public function rules()
     {
         return [
@@ -89,18 +133,31 @@ abstract class AuthItem extends Model
             }],
             ['children', RbacValidator::className()],
             ['rule', function () {
-                try {
-                    $class = new \ReflectionClass($this->rule);
-                } catch (\Exception $ex) {
+                if (!class_exists($this->rule)) {
                     $this->addError('rule', \Yii::t('rbac', 'Class "{0}" does not exist', $this->rule));
-                    return;
-                }
+                } else {
+                    try {
+                        $class = '\yii\rbac\Rule';
+                        $rule  = \Yii::createObject($this->rule);
 
-                if ($class->isInstantiable() == false) {
-                    $this->addError('rule', \Yii::t('rbac', 'Rule class can not be instantiated'));
+                        if (!($rule instanceof $class)) {
+                            $this->addError('rule', \Yii::t('rbac', 'Rule class must extend "yii\rbac\Rule"'));
+                        }
+
+                        if ($rule->name === null) {
+                            $this->addError('rule', \Yii::t('rbac', 'Rule must have "name" property set'));
+                        }
+                    } catch (InvalidConfigException $e) {
+                        $this->addError('rule', \Yii::t('rbac', 'Rule class can not be instantiated'));
+
+                    }
                 }
-                if ($class->isSubclassOf('\yii\rbac\Rule') == false) {
-                    $this->addError('rule', \Yii::t('rbac', 'Rule class must extend "yii\rbac\Rule"'));
+            }],
+            ['data', function () {
+                try {
+                    Json::decode($this->data);
+                } catch (InvalidParamException $e) {
+                    $this->addError('data', \Yii::t('rbac', 'Data must be type of JSON ({0})', $e->getMessage()));
                 }
             }],
         ];
@@ -125,6 +182,7 @@ abstract class AuthItem extends Model
 
         $this->item->name        = $this->name;
         $this->item->description = $this->description;
+        $this->item->data        = $this->data == null ? null : Json::decode($this->data);
 
         if (!empty($this->rule)) {
             $rule = \Yii::createObject($this->rule);
