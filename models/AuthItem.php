@@ -122,7 +122,6 @@ abstract class AuthItem extends Model
     {
         return [
             ['name', 'required'],
-            ['name', 'match', 'pattern' => '/^[\w][\w-.:]+[\w]$/'],
             [['name', 'description', 'rule'], 'trim'],
             ['name', function () {
                 if ($this->manager->getItem($this->name) !== null) {
@@ -133,24 +132,10 @@ abstract class AuthItem extends Model
             }],
             ['children', RbacValidator::className()],
             ['rule', function () {
-                if (!class_exists($this->rule)) {
-                    $this->addError('rule', \Yii::t('rbac', 'Class "{0}" does not exist', $this->rule));
-                } else {
-                    try {
-                        $class = '\yii\rbac\Rule';
-                        $rule  = \Yii::createObject($this->rule);
+                $rule = $this->manager->getRule($this->rule);
 
-                        if (!($rule instanceof $class)) {
-                            $this->addError('rule', \Yii::t('rbac', 'Rule class must extend "yii\rbac\Rule"'));
-                        }
-
-                        if ($rule->name === null) {
-                            $this->addError('rule', \Yii::t('rbac', 'Rule must have "name" property set'));
-                        }
-                    } catch (InvalidConfigException $e) {
-                        $this->addError('rule', \Yii::t('rbac', 'Rule class can not be instantiated'));
-
-                    }
+                if (!$rule) {
+                    $this->addError('rule', \Yii::t('rbac', 'Rule {0} does not exist', $this->rule));
                 }
             }],
             ['data', function () {
@@ -183,16 +168,7 @@ abstract class AuthItem extends Model
         $this->item->name        = $this->name;
         $this->item->description = $this->description;
         $this->item->data        = $this->data == null ? null : Json::decode($this->data);
-
-        if (!empty($this->rule)) {
-            $rule = \Yii::createObject($this->rule);
-            if (null === $this->manager->getRule($rule->name)) {
-                $this->manager->add($rule);
-            }
-            $this->item->ruleName = $rule->name;
-        } else {
-            $this->item->ruleName = null;
-        }
+        $this->item->ruleName    = empty($this->rule) ? null : $this->rule;
   
         if ($isNewItem) {
             \Yii::$app->session->setFlash('success', \Yii::t('rbac', 'Item has been created'));
@@ -203,6 +179,8 @@ abstract class AuthItem extends Model
         }
 
         $this->updateChildren();
+
+        $this->manager->invalidateCache();
 
         return true;
     }

@@ -2,6 +2,11 @@
 
 ## 1.0.0 Under development
 
+- Enh: Invalidate cache after saving auth items/rules (dmeroff)
+- New #77: Added migrate console command (dmeroff)
+- New: Module's class has been renamed from `dektrium\rbac\Module` to `dektrium\rbac\RbacWebModule` (dmeroff)
+- Enh #9: Added ability to manage rules (dmeroff)
+- Enh: Updated grid views (dmeroff)
 - Enh: Added check if rule has name property set (dmeroff)
 - Bug #21: Added loop check while creating unassigned items list (dmeroff)
 - Chg: Bumped required Yii2 version to 2.0.8 (dmeroff)
@@ -15,8 +20,8 @@
 
 ## 0.2.0 December 5, 2015
 
-- Some fixes and improvements
+Some fixes and improvements
 
 ## 0.1.0 June 14, 2015
 
-- Initial release
+Initial release
